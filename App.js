@@ -5,6 +5,7 @@ import * as Speech from 'expo-speech';
 import * as Sensors from 'expo-sensors';
 import { Audio } from 'expo-av';
 import AppNavigator from './src/navigation/AppNavigator';
+import { UserProvider } from './src/context/UserContext';
 
 // Ignore specific warnings that might appear due to dependencies
 LogBox.ignoreLogs([
@@ -89,13 +90,15 @@ export default function App() {
   const arePermissionsGranted = permissions.microphone || permissions.motion;
 
   return (
-    <View style={{ flex: 1 }}>
-      <StatusBar style="light" />
-      <AppNavigator
-        permissionsGranted={arePermissionsGranted} 
-        microphonePermission={permissions.microphone}
-        motionPermission={permissions.motion}
-      />
-    </View>
+    <UserProvider>
+      <View style={{ flex: 1 }}>
+        <StatusBar style="light" />
+        <AppNavigator
+          permissionsGranted={arePermissionsGranted} 
+          microphonePermission={permissions.microphone}
+          motionPermission={permissions.motion}
+        />
+      </View>
+    </UserProvider>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   SafeAreaView, 
   ScrollView, 
@@ -13,6 +13,8 @@ import VoiceListener from '../components/VoiceListener';
 import MotionDetector from '../components/MotionDetector';
 import EmergencyAlertManager from '../components/EmergencyAlertManager';
 import ContactsManager from '../components/ContactsManager';
+import NameInputModal from '../components/NameInputModal';
+import { useUser } from '../context/UserContext';
 
 const HomeScreen = ({ 
   navigation,
@@ -22,6 +24,20 @@ const HomeScreen = ({
 }) => {
   // Reference to the EmergencyAlertManager component using useRef instead of useState
   const alertManagerRef = useRef(null);
+  const { userName, location, isLoading } = useUser();
+  const [showNameModal, setShowNameModal] = useState(false);
+
+  // Check if we need to show the name input modal
+  useEffect(() => {
+    if (!isLoading && !userName) {
+      setShowNameModal(true);
+    }
+  }, [isLoading, userName]);
+
+  // Handle closing the name modal
+  const handleCloseNameModal = () => {
+    setShowNameModal(false);
+  };
 
   // Handler for emergencies detected by components
   const handleEmergency = useCallback((type, details) => {
@@ -49,9 +65,16 @@ const HomeScreen = ({
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
 
+      {/* Name input modal */}
+      <NameInputModal visible={showNameModal} onClose={handleCloseNameModal} />
+
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         <View style={styles.infoCard}>
-          <Text style={styles.welcomeText}>Welcome to SafeGuard</Text>
+          {userName ? (
+            <Text style={styles.welcomeText}>Welcome, {userName}</Text>
+          ) : (
+            <Text style={styles.welcomeText}>Welcome to SafeGuard</Text>
+          )}
           <Text style={styles.infoText}>
             This app uses your phone's sensors to detect potential emergency situations
             and can alert you when danger is detected.

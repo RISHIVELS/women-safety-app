@@ -1,12 +1,16 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, FlatList, Vibration, Switch } from 'react-native';
 import { sendEmergencySMS, testSendSMS } from '../utils/sms';
+import { sendEmergencyAlert } from '../utils/api';
+import { useUser } from '../context/UserContext';
 
 const EmergencyAlertManager = forwardRef((props, ref) => {
   const [alertHistory, setAlertHistory] = useState([]);
   const [isAlarming, setIsAlarming] = useState(false);
   const [autoSendSMS, setAutoSendSMS] = useState(true);
   const [smsSent, setSmsSent] = useState(false);
+  const [apiAlertSent, setApiAlertSent] = useState(false);
+  const { userName, location } = useUser();
   
   // Vibration pattern: wait 500ms, vibrate 500ms, wait 500ms, vibrate 500ms
   const VIBRATION_PATTERN = [500, 500, 500, 500];
@@ -19,7 +23,13 @@ const EmergencyAlertManager = forwardRef((props, ref) => {
     // Start repeated vibration
     Vibration.vibrate(VIBRATION_PATTERN, true);
     
-    // Send SMS if enabled and not already sent for this alert
+    // PRIORITY 1: Send emergency alert to backend API immediately
+    if (!apiAlertSent) {
+      console.log('PRIORITY: Sending emergency alert to API server...');
+      sendApiAlert(type, details);
+    }
+    
+    // PRIORITY 2: Send SMS if enabled and not already sent for this alert
     if (autoSendSMS && !smsSent) {
       console.log('Sending emergency SMS...');
       const sent = await sendEmergencySMS(type, details);
@@ -31,10 +41,63 @@ const EmergencyAlertManager = forwardRef((props, ref) => {
     }
   };
 
+  // Send alert to the backend API
+  const sendApiAlert = async (type, details) => {
+    if (!userName) {
+      console.log('No user name available for API alert');
+      Alert.alert(
+        'Alert Not Sent',
+        'Please provide your name in the app settings to enable emergency alerts.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      console.log('Sending emergency alert to backend API...');
+      const alertData = {
+        name: userName,
+        address: location || 'Unknown location',
+        alertType: type,
+        details: details,
+        timestamp: new Date().toISOString()
+      };
+
+      const response = await sendEmergencyAlert(alertData);
+      setApiAlertSent(response.success);
+      
+      if (response.success) {
+        console.log('Successfully sent alert to backend API');
+      } else {
+        console.log(`Failed to send alert to backend API: ${response.error}`);
+        
+        // Only show an alert for test button, not during actual emergency
+        if (type === 'test') {
+          if (response.offline) {
+            Alert.alert(
+              'Connection Failed',
+              'Could not connect to the emergency server. Please check your internet connection.',
+              [{ text: 'OK' }]
+            );
+          } else {
+            Alert.alert(
+              'Alert Not Sent',
+              `Failed to send emergency alert: ${response.error}`,
+              [{ text: 'OK' }]
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error sending API alert:', error);
+    }
+  };
+
   // Handle incoming emergency alerts
   const handleEmergency = (type, details) => {
-    // Reset SMS sent flag for new alerts
+    // Reset sent flags for new alerts
     setSmsSent(false);
+    setApiAlertSent(false);
     
     // Create a new alert entry
     const newAlert = {
@@ -47,43 +110,20 @@ const EmergencyAlertManager = forwardRef((props, ref) => {
     // Update alert history
     setAlertHistory(prevAlerts => [newAlert, ...prevAlerts]);
     
-    // For motion-based emergencies, immediately start alert without asking permission
-    if (type === 'motion') {
-      // Show informational alert but immediately start vibration
-      Alert.alert(
-        'Emergency Detected',
-        `Type: ${type}\nDetails: ${details}`,
-        [
-          {
-            text: 'Stop Alert',
-            onPress: stopAlert,
-            style: 'cancel',
-          }
-        ],
-        { cancelable: false }
-      );
-      
-      // Automatically start the alert
-      startAlert(type, details);
+    // For all emergency types, automatically send alert without showing popups
+    console.log(`EMERGENCY DETECTED (${type}): Automatically sending alert`);
+    
+    // Just add a notification to the console and history
+    if (type === 'voice') {
+      console.log(`🔊 VOICE ALERT: ${details}`);
+    } else if (type === 'motion') {
+      console.log(`📱 MOTION ALERT: ${details}`);
     } else {
-      // For voice or other types, show alert dialog with options
-      Alert.alert(
-        'Emergency Detected',
-        `Type: ${type}\nDetails: ${details}`,
-        [
-          {
-            text: 'Ignore',
-            style: 'cancel',
-          },
-          {
-            text: 'Vibrate Alert',
-            onPress: () => startAlert(type, details),
-            style: 'destructive',
-          },
-        ],
-        { cancelable: false }
-      );
+      console.log(`⚠️ ALERT (${type}): ${details}`);
     }
+    
+    // Automatically start the alert without showing any popup
+    startAlert(type, details);
   };
 
   // Expose methods to parent components via ref
@@ -113,10 +153,6 @@ const EmergencyAlertManager = forwardRef((props, ref) => {
     setAlertHistory([]);
   };
 
-  // Test SMS functionality
-  const handleTestSMS = () => {
-    testSendSMS();
-  };
 
   // Render alert history item
   const renderAlertItem = ({ item }) => (
@@ -156,12 +192,6 @@ const EmergencyAlertManager = forwardRef((props, ref) => {
         />
       </View>
       
-      <TouchableOpacity
-        style={styles.smsSendButton}
-        onPress={handleTestSMS}
-      >
-        <Text style={styles.smsSendButtonText}>Test Emergency SMS</Text>
-      </TouchableOpacity>
       
       {alertHistory.length > 0 ? (
         <View style={styles.historyContainer}>
@@ -192,13 +222,7 @@ const EmergencyAlertManager = forwardRef((props, ref) => {
           </Text>
         </View>
       )}
-      
-      <TouchableOpacity
-        style={styles.testButton}
-        onPress={() => handleEmergency('test', 'Manual test alert')}
-      >
-        <Text style={styles.testButtonText}>Test Alert</Text>
-      </TouchableOpacity>
+
     </View>
   );
 });
@@ -250,18 +274,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#555',
   },
-  smsSendButton: {
-    backgroundColor: '#4caf50',
-    padding: 10,
-    borderRadius: 4,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  smsSendButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
+
   historyContainer: {
     marginVertical: 8,
   },
@@ -328,18 +341,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 16,
   },
-  testButton: {
-    backgroundColor: '#d81b60',
-    paddingVertical: 12,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  testButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
+
 });
 
 export default EmergencyAlertManager; 

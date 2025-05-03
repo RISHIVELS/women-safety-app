@@ -332,6 +332,7 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
     const now = Date.now();
     if (now - lastAlertTimeRef.current > ALERT_COOLDOWN) {
       console.log(`${reason}: ${value.toFixed(2)}`);
+      console.log(`🚨 MOTION EMERGENCY DETECTED - This will send data to backend API`);
       onEmergencyDetected('motion', `${reason} (value: ${value.toFixed(2)})`);
       lastAlertTimeRef.current = now;
     }

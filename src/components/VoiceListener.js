@@ -21,10 +21,11 @@ const VoiceListener = ({ onEmergencyDetected, permissionsGranted = false }) => {
   const continuousVibrationRef = useRef(null);
   
   // Thresholds for volume detection - adjusted based on user request
-  const VOLUME_THRESHOLD_FOR_VIBRATION = .8; // Only vibrate above 110% volume
-  const VOLUME_THRESHOLD_MEDIUM = 1.3;        // Medium volume (130%)
-  const VOLUME_THRESHOLD_HIGH = 1.5;          // High volume (150%)
-  const VOLUME_THRESHOLD_SCREAM = 1.7;        // Scream level (170%)
+  const VOLUME_THRESHOLD_FOR_VIBRATION = .8;  // Only vibrate above 80% volume
+  const VOLUME_THRESHOLD_API_CALL = 0.9;      // Make API call when volume exceeds 90%
+  const VOLUME_THRESHOLD_MEDIUM = 1.2;        // Medium volume (120%)
+  const VOLUME_THRESHOLD_HIGH = 1.4;          // High volume (140%)
+  const VOLUME_THRESHOLD_SCREAM = 1.5;        // Scream level (150%)
   
   const ALERT_COOLDOWN = 2000;     // Time between emergency alerts (ms)
   const VIBRATION_COOLDOWN = 300;  // Time between vibrations (ms)
@@ -207,7 +208,7 @@ const VoiceListener = ({ onEmergencyDetected, permissionsGranted = false }) => {
       // Print to console for debugging - showing exact volume level
       console.log(`Audio level: ${(currentVolume * 100).toFixed(0)}%`);
       
-      // Check volume against threshold of 110%
+      // Check volume against threshold for vibration
       if (currentVolume > VOLUME_THRESHOLD_FOR_VIBRATION) {
         // If not already continuously vibrating, start it
         if (!isContinuousVibrating) {
@@ -215,16 +216,26 @@ const VoiceListener = ({ onEmergencyDetected, permissionsGranted = false }) => {
         }
         
         // Log that we detected above threshold sound
-        console.log(`VOLUME ABOVE 110% DETECTED: ${(currentVolume * 100).toFixed(0)}%`);
+        console.log(`VOLUME ABOVE ${(VOLUME_THRESHOLD_FOR_VIBRATION * 100).toFixed(0)}% DETECTED: ${(currentVolume * 100).toFixed(0)}%`);
       }
-      
-      // Check for extremely loud sounds for emergency alerts
-      if (currentVolume > VOLUME_THRESHOLD_SCREAM) {
-        handleLoudSound(currentVolume, "Potential scream detected");
-      } else if (currentVolume > VOLUME_THRESHOLD_HIGH) {
-        handleLoudSound(currentVolume, "Loud sound detected");
+
+      // Check for volume above 90% to make API call
+      if (currentVolume > VOLUME_THRESHOLD_API_CALL) {
+        const volumePercent = Math.round(currentVolume * 100);
+        console.log(`🚨 VOLUME ABOVE 90% DETECTED (${volumePercent}%) - MAKING API CALL`);
+        
+        // Make API call - choose appropriate message based on volume
+        if (currentVolume > VOLUME_THRESHOLD_SCREAM) {
+          handleLoudSound(currentVolume, "Scream detected");
+        } else if (currentVolume > VOLUME_THRESHOLD_HIGH) {
+          handleLoudSound(currentVolume, "Loud sound detected");
+        } else if (currentVolume > VOLUME_THRESHOLD_MEDIUM) {
+          handleLoudSound(currentVolume, "Medium-loud sound detected");
+        } else {
+          handleLoudSound(currentVolume, "Sound above threshold detected");
+        }
       } else if (currentVolume > VOLUME_THRESHOLD_MEDIUM) {
-        // Medium sounds get logged
+        // Medium sounds get logged but don't trigger API calls
         console.log(`Medium sound detected (${Math.round(currentVolume * 100)}%)`);
       }
     }
@@ -236,8 +247,9 @@ const VoiceListener = ({ onEmergencyDetected, permissionsGranted = false }) => {
     
     // Create an interval to simulate audio input
     statusUpdateIntervalRef.current = setInterval(() => {
-      // Simulate random audio levels
-      const randomVolume = Math.random() * 1.7; // 0-1.7 range
+      // Simulate random audio levels - increased probability of high volume
+      // Generate a value between 0.5 and 2.0 for better testing
+      const randomVolume = 0.5 + (Math.random() * 1.5); 
       
       // Update the display
       setVolume(randomVolume);
@@ -249,9 +261,28 @@ const VoiceListener = ({ onEmergencyDetected, permissionsGranted = false }) => {
         }
       }
       
-      // Simulate emergency detection (very rarely)
-      if (randomVolume > VOLUME_THRESHOLD_SCREAM) {
-        handleLoudSound(randomVolume, "Simulated loud sound detected");
+      // Always trigger API call when above API_CALL threshold (90%)
+      if (randomVolume > VOLUME_THRESHOLD_API_CALL) {
+        const volumePercent = Math.round(randomVolume * 100);
+        
+        // Determine message based on volume level
+        let message;
+        if (randomVolume > VOLUME_THRESHOLD_SCREAM) {
+          message = "Simulated scream detected";
+        } else if (randomVolume > VOLUME_THRESHOLD_HIGH) {
+          message = "Simulated loud sound detected";
+        } else if (randomVolume > VOLUME_THRESHOLD_MEDIUM) {
+          message = "Simulated medium-loud sound detected";
+        } else {
+          message = "Simulated sound above threshold detected";
+        }
+        
+        // Limit how often we trigger alerts to avoid too many API calls
+        const now = Date.now();
+        if (now - lastEmergencyTimeRef.current > ALERT_COOLDOWN) {
+          console.log(`🎤 SIMULATED SOUND DETECTED (${volumePercent}%) - Triggering API call`);
+          handleLoudSound(randomVolume, message);
+        }
       }
     }, 1000);
   };
@@ -311,19 +342,23 @@ const VoiceListener = ({ onEmergencyDetected, permissionsGranted = false }) => {
     const now = Date.now();
     // Prevent too many alerts (debounce)
     if (now - lastEmergencyTimeRef.current > ALERT_COOLDOWN) {
-      // Log loud sound
-      console.log(`🔊 LOUD SOUND DETECTED - ${message} (${Math.round(volumeLevel * 100)}%)`);
+      // Calculate percentage volume for display
+      const volumePercent = Math.round(volumeLevel * 100);
       
-      // Update the UI
-      setResults([message]);
+      // Log loud sound with more detailed message
+      console.log(`🔊 LOUD SOUND DETECTED - ${message} (${volumePercent}%)`);
+      console.log(`🚨 SENDING EMERGENCY ALERT - Direct API call to backend with user data`);
+      
+      // Update the UI with more informative message
+      setResults([`${message} - Alert sent automatically (${volumePercent}%)`]);
       
       // Make sure continuous vibration is active
       if (!isContinuousVibrating) {
         startContinuousVibration(volumeLevel);
       }
       
-      // Trigger emergency
-      onEmergencyDetected('voice', `${message} (volume level: ${Math.round(volumeLevel * 100)}%)`);
+      // Trigger emergency with detailed message
+      onEmergencyDetected('voice', `${message} (volume level: ${volumePercent}%, API call sent)`);
       
       // Set the last alert time
       lastEmergencyTimeRef.current = now;
@@ -430,7 +465,16 @@ const VoiceListener = ({ onEmergencyDetected, permissionsGranted = false }) => {
         <Text style={styles.infoText}>
           {isContinuousVibrating 
             ? 'Continuous vibration active - Press Stop to cancel' 
-            : 'Vibrates continuously when volume exceeds 110%'}
+            : 'Auto-sends emergency alert when volume exceeds 90%'}
+        </Text>
+        
+        <Text style={styles.thresholdText}>
+          {volume > VOLUME_THRESHOLD_API_CALL 
+            ? `🔴 Volume ${Math.round(volume * 100)}% - Emergency alert sending` 
+            : volume > VOLUME_THRESHOLD_FOR_VIBRATION 
+              ? `🟠 Volume ${Math.round(volume * 100)}% - Need ${Math.max(0, Math.round((VOLUME_THRESHOLD_API_CALL - volume) * 100))}% more for alert`
+              : `Current volume: ${Math.round(volume * 100)}%`
+          }
         </Text>
       </View>
 
@@ -497,6 +541,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 8,
   },
+  thresholdText: {
+    color: '#d81b60',
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginTop: 8,
+    textAlign: 'center',
+  },
   button: {
     padding: 12,
     borderRadius: 25,
@@ -512,6 +563,7 @@ const styles = StyleSheet.create({
   disabledButton: {
     backgroundColor: '#bdbdbd', // Gray for disabled state
   },
+
   buttonText: {
     color: 'white',
     fontWeight: 'bold',
