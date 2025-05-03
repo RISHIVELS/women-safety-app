@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "This app needs microphone access to detect voice commands and screams for emergency situations",
-        "NSMotionUsageDescription": "This app needs motion sensor access to detect falls and aggressive movements"
+        "NSMotionUsageDescription": "This app needs motion sensor access to detect falls and aggressive movements",
+        "NSLocationWhenInUseUsageDescription": "Your location is shared only during emergencies to help contacts reach you",
+        "NSLocationAlwaysUsageDescription": "Your location is shared only during emergencies to help contacts reach you"
       }
     },
     "android": {
@@ -27,7 +29,10 @@
       "permissions": [
         "RECORD_AUDIO",
         "VIBRATE",
-        "ACTIVITY_RECOGNITION"
+        "ACTIVITY_RECOGNITION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "SEND_SMS"
       ],
       "edgeToEdgeEnabled": true
     },
@@ -46,7 +51,14 @@
         {
           "microphonePermission": "The app needs to access your microphone to detect emergency situations through audio."
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Your location is shared only during emergencies to help contacts reach you."
+        }
+      ],
+      "expo-audio"
     ]
   }
 }

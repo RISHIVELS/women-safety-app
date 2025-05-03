@@ -9,32 +9,23 @@ import {
   Alert 
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import Header from '../components/Header';
 import VoiceListener from '../components/VoiceListener';
 import MotionDetector from '../components/MotionDetector';
 import EmergencyAlertManager from '../components/EmergencyAlertManager';
+import ContactsManager from '../components/ContactsManager';
 
-const HomeScreen = ({ permissionsGranted = false }) => {
+const HomeScreen = ({ 
+  navigation,
+  permissionsGranted = false, 
+  microphonePermission = false, 
+  motionPermission = false 
+}) => {
   // Reference to the EmergencyAlertManager component using useRef instead of useState
   const alertManagerRef = useRef(null);
-  // Reference to the VoiceListener for controlling vibration
-  const voiceListenerRef = useRef(null);
 
   // Handler for emergencies detected by components
   const handleEmergency = useCallback((type, details) => {
     console.log(`Emergency detected - Type: ${type}, Details: ${details}`);
-    
-    // Start continuous vibration without asking permission when motion emergency is detected
-    if (type === 'motion' && voiceListenerRef.current) {
-      // Check if it contains rapid rotation
-      if (details.includes('rotation')) {
-        console.log('Rapid rotation detected - starting continuous vibration immediately');
-        voiceListenerRef.current.startContinuousVibration(2.0); // High intensity vibration
-      } else if (details.includes('Severe movement')) {
-        console.log('Severe movement detected - starting continuous vibration immediately');
-        voiceListenerRef.current.startContinuousVibration(1.7); // Medium-high intensity
-      }
-    }
     
     // Forward to alert manager if available
     if (alertManagerRef.current && alertManagerRef.current.handleEmergency) {
@@ -49,31 +40,61 @@ const HomeScreen = ({ permissionsGranted = false }) => {
     }
   }, []);
 
+  // Navigate to map screen
+  const goToMap = () => {
+    navigation.navigate('Map');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
-      <Header title="Women Safety App" />
-      
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.sectionTitle}>Emergency Detection</Text>
-        
-        {/* Voice Listener Component */}
+      <StatusBar style="light" />
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        <View style={styles.infoCard}>
+          <Text style={styles.welcomeText}>Welcome to SafeGuard</Text>
+          <Text style={styles.infoText}>
+            This app uses your phone's sensors to detect potential emergency situations
+            and can alert you when danger is detected.
+          </Text>
+          
+          {!permissionsGranted && (
+            <View style={styles.permissionWarning}>
+              <Text style={styles.permissionWarningText}>
+                ⚠️ Permission(s) not granted. Some features may be limited.
+                Emergency detection will still work when motion is severe.
+              </Text>
+            </View>
+          )}
+          
+          <TouchableOpacity style={styles.mapButton} onPress={goToMap}>
+            <Text style={styles.mapButtonText}>View My Location on Map</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Main detection modules */}
         <VoiceListener 
-          ref={voiceListenerRef}
           onEmergencyDetected={handleEmergency} 
-          permissionsGranted={permissionsGranted}
+          permissionsGranted={microphonePermission} 
         />
-        
-        {/* Motion Detector Component */}
         <MotionDetector 
           onEmergencyDetected={handleEmergency}
-          permissionsGranted={permissionsGranted}
+          permissionsGranted={motionPermission}
         />
-        
-        {/* Emergency Alert Manager */}
+
+        {/* Emergency alert handling */}
         <EmergencyAlertManager 
           ref={alertManagerRef}
         />
+        
+        {/* Emergency contacts management */}
+        <ContactsManager />
+
+        <View style={styles.footerCard}>
+          <Text style={styles.footerText}>
+            Safety protection active for severe motion even without permissions.
+            Add emergency contacts to send SMS alerts automatically.
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -82,16 +103,74 @@ const HomeScreen = ({ permissionsGranted = false }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f2f2f2',
   },
-  scrollContent: {
+  scrollView: {
+    flex: 1,
+  },
+  content: {
     padding: 16,
   },
-  sectionTitle: {
+  infoCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  welcomeText: {
     fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 16,
-    color: '#333',
+    color: '#d81b60',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 16,
+    color: '#555',
+    lineHeight: 22,
+  },
+  permissionWarning: {
+    marginTop: 12,
+    padding: 8,
+    backgroundColor: '#fff3e0',
+    borderRadius: 4,
+    borderLeftWidth: 3,
+    borderLeftColor: '#ff9800',
+  },
+  permissionWarningText: {
+    color: '#e65100',
+    fontSize: 14,
+  },
+  mapButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 25,
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  mapButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  footerCard: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 24,
+    borderLeftWidth: 4,
+    borderLeftColor: '#d81b60',
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
   },
 });
 

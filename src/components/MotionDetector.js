@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Switch, StyleSheet, Vibration, TouchableOpacity } from 'react-native';
+import { View, Text, Switch, StyleSheet, Vibration } from 'react-native';
 import { Accelerometer, Gyroscope } from 'expo-sensors';
 
 const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => {
@@ -19,13 +19,12 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
     isShaking: false
   });
   const [sensorAvailable, setSensorAvailable] = useState(false);
-  const [isContinuousVibrating, setIsContinuousVibrating] = useState(false);
   
   // Use refs for values that shouldn't trigger rerenders
   const shakingTimeoutRef = useRef(null);
   const lastAlertTimeRef = useRef(0);
   const updateDisplayIntervalRef = useRef(null);
-  const isUnmountingRef = useRef(false);
+  const emergencyModeRef = useRef(false);
   
   // Define thresholds for detecting potential emergencies
   const ACCELERATION_THRESHOLD = 20; // Adjusted to be more sensitive 
@@ -36,7 +35,6 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
   // Vibration patterns
   const VIBRATION_PATTERN = [100, 200, 100, 200]; // Short vibration pattern
   const EMERGENCY_VIBRATION_PATTERN = [0, 500, 200, 500, 200, 500]; // More intense pattern
-  const CONTINUOUS_VIBRATION_PATTERN = [100, 50, 300, 50]; // Pattern for continuous vibration
   
   // Subscription references
   const accelerometerSubscriptionRef = useRef(null);
@@ -44,7 +42,7 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
 
   // Configure sensor update intervals (in ms)
   const UPDATE_INTERVAL = 100; // 10 updates per second
-  const DISPLAY_UPDATE_INTERVAL = 500;
+  const DISPLAY_UPDATE_INTERVAL = 500; // Only update display 2 times per second
 
   // Check sensor availability on mount and when permissions change
   useEffect(() => {
@@ -103,8 +101,7 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
   // Clean up on unmount
   useEffect(() => {
     return () => {
-      isUnmountingRef.current = true;
-      safeUnsubscribeFromSensors();
+      unsubscribeFromSensors();
       
       if (shakingTimeoutRef.current) {
         clearTimeout(shakingTimeoutRef.current);
@@ -118,39 +115,15 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
       
       // Cancel any ongoing vibrations
       Vibration.cancel();
-      setIsContinuousVibrating(false);
     };
   }, []);
-
-  // Start continuous vibration
-  const startContinuousVibration = () => {
-    if (isContinuousVibrating || isUnmountingRef.current) return;
-    
-    console.log('Starting continuous vibration due to rapid motion');
-    setIsContinuousVibrating(true);
-    
-    // Start continuous vibration without asking for permission
-    Vibration.vibrate(CONTINUOUS_VIBRATION_PATTERN, true);
-  };
-
-  // Stop continuous vibration
-  const stopContinuousVibration = () => {
-    if (!isContinuousVibrating || isUnmountingRef.current) return;
-    
-    console.log('Stopping continuous vibration');
-    Vibration.cancel();
-    setIsContinuousVibrating(false);
-  };
 
   // Monitor changes to isMonitoring state
   useEffect(() => {
     if (isMonitoring && permissionsGranted && sensorAvailable) {
       subscribeToSensors();
     } else {
-      safeUnsubscribeFromSensors();
-      if (isContinuousVibrating) {
-        stopContinuousVibration();
-      }
+      unsubscribeFromSensors();
       sensorDataRef.current.shakingIntensity = 0;
       sensorDataRef.current.isShaking = false;
       setDisplayData({
@@ -161,20 +134,35 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
       });
     }
   }, [isMonitoring, permissionsGranted, sensorAvailable]);
-
-  // Handle vibration when shaking state changes
+  
+  // Always subscribe to sensors at low frequency for emergency detection
+  // even if user hasn't enabled monitoring
   useEffect(() => {
-    // Only vibrate if shaking and not already continuously vibrating
-    if (displayData.isShaking && !isContinuousVibrating && !isUnmountingRef.current) {
-      Vibration.vibrate(VIBRATION_PATTERN, false);
+    // Try to initialize emergency sensor monitoring regardless of permissions
+    if (!isMonitoring) {
+      tryEmergencyMonitoring();
     }
     
     return () => {
-      if (!isContinuousVibrating) {
-        Vibration.cancel();
+      if (emergencyModeRef.current) {
+        unsubscribeEmergencySensors();
       }
     };
-  }, [displayData.isShaking, isContinuousVibrating]);
+  }, []);
+
+  // Handle vibration when shaking state changes
+  useEffect(() => {
+    if (displayData.isShaking) {
+      // Vibrate the device when shaking is detected
+      Vibration.vibrate(VIBRATION_PATTERN, false);
+    } else {
+      Vibration.cancel();
+    }
+    
+    return () => {
+      Vibration.cancel();
+    };
+  }, [displayData.isShaking]);
   
   // Clear any ongoing shaking timeout
   const clearShakingTimeout = () => {
@@ -184,42 +172,74 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
     }
   };
 
-  // Safe unsubscribe method to prevent call stack issues
-  const safeUnsubscribeFromSensors = () => {
+  // Try to initialize emergency monitoring regardless of permission state
+  const tryEmergencyMonitoring = () => {
     try {
-      if (accelerometerSubscriptionRef.current) {
-        const subscription = accelerometerSubscriptionRef.current;
-        accelerometerSubscriptionRef.current = null;
-        subscription.remove();
-      }
-      
-      if (gyroscopeSubscriptionRef.current) {
-        const subscription = gyroscopeSubscriptionRef.current;
-        gyroscopeSubscriptionRef.current = null;
-        subscription.remove();
+      // Only subscribe for emergency monitoring if not already monitoring
+      if (!accelerometerSubscriptionRef.current && !emergencyModeRef.current) {
+        emergencyModeRef.current = true;
+        
+        // Set a longer update interval for background monitoring to save battery
+        Accelerometer.setUpdateInterval(1000); // Once per second is enough for emergencies
+        
+        // Subscribe only to accelerometer for emergency detection
+        accelerometerSubscriptionRef.current = Accelerometer.addListener(accelerometerData => {
+          // Only process for emergency detection (severe shaking)
+          const magnitude = calculateMagnitude(
+            accelerometerData.x,
+            accelerometerData.y,
+            accelerometerData.z - 9.8 // Subtract gravity
+          );
+          
+          // Only alert for severe movements when in emergency mode
+          if (magnitude > SEVERE_ACCELERATION_THRESHOLD) {
+            handleEmergencyDetection('SEVERE movement detected', magnitude);
+            Vibration.vibrate(EMERGENCY_VIBRATION_PATTERN);
+            
+            // If we detect an emergency, switch to regular monitoring mode if possible
+            if (!isMonitoring && sensorAvailable) {
+              setIsMonitoring(true);
+            }
+          }
+        });
       }
     } catch (error) {
-      console.error('Error safely unsubscribing from sensors:', error);
+      console.error('Error initializing emergency monitoring:', error);
+      emergencyModeRef.current = false;
+    }
+  };
+
+  // Unsubscribe from emergency-only sensors
+  const unsubscribeEmergencySensors = () => {
+    try {
+      if (accelerometerSubscriptionRef.current && emergencyModeRef.current) {
+        accelerometerSubscriptionRef.current.remove();
+        accelerometerSubscriptionRef.current = null;
+        emergencyModeRef.current = false;
+      }
+    } catch (error) {
+      console.error('Error unsubscribing from emergency sensors:', error);
     }
   };
 
   const subscribeToSensors = () => {
+    // Clean up any existing subscriptions first
+    unsubscribeFromSensors();
+    
     // Don't attempt to subscribe if sensors aren't available
-    if (!sensorAvailable || !permissionsGranted || isUnmountingRef.current) return;
+    // Note: We'll still try to monitor for emergencies even without permissions
+    if (!sensorAvailable) {
+      tryEmergencyMonitoring();
+      return;
+    }
 
     try {
-      // Ensure we're not already subscribed
-      safeUnsubscribeFromSensors();
-      
       // Set update intervals
       Accelerometer.setUpdateInterval(UPDATE_INTERVAL);
       Gyroscope.setUpdateInterval(UPDATE_INTERVAL);
       
       // Subscribe to accelerometer
       accelerometerSubscriptionRef.current = Accelerometer.addListener(accelerometerData => {
-        // Skip processing if unmounting
-        if (isUnmountingRef.current) return;
-        
         // Store data in ref instead of state to prevent excess renders
         sensorDataRef.current.acc = accelerometerData;
         
@@ -244,27 +264,23 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
           
           // Reset shake state after 1 second if no new high movements
           shakingTimeoutRef.current = setTimeout(() => {
-            if (!isUnmountingRef.current) {
-              sensorDataRef.current.isShaking = false;
-            }
+            sensorDataRef.current.isShaking = false;
           }, 1000);
         }
         
         // Check for sudden movement that exceeds emergency threshold
-        if (magnitude > SEVERE_ACCELERATION_THRESHOLD) {
-          // Start continuous vibration immediately
-          startContinuousVibration();
-          handleEmergencyDetection('Severe movement detected', magnitude);
-        } else if (magnitude > ACCELERATION_THRESHOLD) {
+        if (magnitude > ACCELERATION_THRESHOLD) {
+          // For severe movements, trigger special vibration
+          if (magnitude > SEVERE_ACCELERATION_THRESHOLD) {
+            Vibration.vibrate(EMERGENCY_VIBRATION_PATTERN);
+          }
+          
           handleEmergencyDetection('Sudden movement detected', magnitude);
         }
       });
       
       // Subscribe to gyroscope
       gyroscopeSubscriptionRef.current = Gyroscope.addListener(gyroscopeData => {
-        // Skip processing if unmounting
-        if (isUnmountingRef.current) return;
-        
         // Store gyro data in ref
         sensorDataRef.current.gyro = gyroscopeData;
         
@@ -277,20 +293,33 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
         
         // Check for rapid rotation
         if (rotationMagnitude > GYROSCOPE_THRESHOLD) {
-          // Start continuous vibration immediately without asking permission
-          startContinuousVibration();
-          
-          // Then notify about emergency
           handleEmergencyDetection('Rapid rotation detected', rotationMagnitude);
         }
       });
     } catch (error) {
       console.error('Error subscribing to sensors:', error);
+      // Fallback to emergency-only monitoring
+      tryEmergencyMonitoring();
     }
   };
 
   const unsubscribeFromSensors = () => {
-    safeUnsubscribeFromSensors();
+    try {
+      if (accelerometerSubscriptionRef.current) {
+        accelerometerSubscriptionRef.current.remove();
+        accelerometerSubscriptionRef.current = null;
+      }
+      
+      if (gyroscopeSubscriptionRef.current) {
+        gyroscopeSubscriptionRef.current.remove();
+        gyroscopeSubscriptionRef.current = null;
+      }
+      
+      // Reset emergency mode flag if necessary
+      emergencyModeRef.current = false;
+    } catch (error) {
+      console.error('Error unsubscribing from sensors:', error);
+    }
   };
 
   // Calculate magnitude of a 3D vector
@@ -300,9 +329,6 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
 
   // Handle emergency detection with debouncing to prevent multiple alerts
   const handleEmergencyDetection = (reason, value) => {
-    // Skip if component is unmounting
-    if (isUnmountingRef.current) return;
-    
     const now = Date.now();
     if (now - lastAlertTimeRef.current > ALERT_COOLDOWN) {
       console.log(`${reason}: ${value.toFixed(2)}`);
@@ -324,16 +350,10 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
       <View style={styles.switchRow}>
         <Text style={styles.switchLabel}>
           {isMonitoring ? 'Monitoring active' : 'Monitoring inactive'}
-          {isContinuousVibrating ? ' (VIBRATING)' : ''}
         </Text>
         <Switch
           value={isMonitoring}
-          onValueChange={(value) => {
-            setIsMonitoring(value);
-            if (!value) {
-              stopContinuousVibration();
-            }
-          }}
+          onValueChange={setIsMonitoring}
           trackColor={{ false: '#767577', true: '#f8bbd0' }}
           thumbColor={isMonitoring ? '#d81b60' : '#f4f3f4'}
           disabled={!sensorAvailable || !permissionsGranted}
@@ -388,20 +408,6 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
               />
             </View>
           </View>
-          
-          {isContinuousVibrating && (
-            <View style={styles.continuousVibrationContainer}>
-              <Text style={styles.emergencyText}>
-                CONTINUOUS VIBRATION ACTIVE
-              </Text>
-              <TouchableOpacity 
-                style={styles.stopButton}
-                onPress={stopContinuousVibration}
-              >
-                <Text style={styles.stopButtonText}>Stop Vibration</Text>
-              </TouchableOpacity>
-            </View>
-          )}
           
           {displayData.isShaking && (
             <Text style={styles.alertText}>
@@ -498,33 +504,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     fontSize: 16,
-  },
-  continuousVibrationContainer: {
-    marginTop: 12,
-    padding: 10,
-    backgroundColor: '#ffebee',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#f44336',
-    alignItems: 'center',
-  },
-  emergencyText: {
-    color: '#d32f2f',
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  stopButton: {
-    backgroundColor: '#d32f2f',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginTop: 4,
-  },
-  stopButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 14,
   },
 });
 
