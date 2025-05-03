@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "women-safety-app",
+    "name": "SafeGuard",
     "slug": "women-safety-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,17 +13,40 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "This app needs microphone access to detect voice commands and screams for emergency situations",
+        "NSMotionUsageDescription": "This app needs motion sensor access to detect falls and aggressive movements"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": [
+        "RECORD_AUDIO",
+        "VIBRATE",
+        "ACTIVITY_RECOGNITION"
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "This app needs motion sensor access to detect dangerous situations."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "The app needs to access your microphone to detect emergency situations through audio."
+        }
+      ]
+    ]
   }
 }
