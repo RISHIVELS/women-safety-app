@@ -14,6 +14,7 @@ import MotionDetector from '../components/MotionDetector';
 import EmergencyAlertManager from '../components/EmergencyAlertManager';
 import ContactsManager from '../components/ContactsManager';
 import NameInputModal from '../components/NameInputModal';
+import CameraComponent from '../components/CameraComponent';
 import { useUser } from '../context/UserContext';
 
 const HomeScreen = ({ 
@@ -92,6 +93,12 @@ const HomeScreen = ({
           <TouchableOpacity style={styles.mapButton} onPress={goToMap}>
             <Text style={styles.mapButtonText}>View My Location on Map</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Camera Test Component */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Camera Test</Text>
+          <CameraComponent />
         </View>
 
         {/* Main detection modules */}
@@ -194,6 +201,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontStyle: 'italic',
+  },
+  sectionContainer: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
 });
 
