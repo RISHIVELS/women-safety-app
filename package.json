@@ -1,6 +1,7 @@
 {
   "name": "women-safety-app",
   "version": "1.0.0",
+  "author":"NANO HACKERS",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
