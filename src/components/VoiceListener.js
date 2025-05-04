@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Vibration, Alert } from 'react-native';
 import { Audio } from 'expo-av';
+import { useEmergency } from '../context/EmergencyContext';
 
 /**
  * Voice Listener component using real microphone
@@ -11,6 +12,9 @@ const VoiceListener = ({ onEmergencyDetected, permissionsGranted = false }) => {
   const [error, setError] = useState('');
   const [volume, setVolume] = useState(0);
   const [isContinuousVibrating, setIsContinuousVibrating] = useState(false);
+  
+  // Access the emergency context
+  const { triggerEmergencyCamera } = useEmergency();
   
   // Refs for microphone recording
   const recording = useRef(null);
@@ -359,6 +363,12 @@ const VoiceListener = ({ onEmergencyDetected, permissionsGranted = false }) => {
       
       // Trigger emergency with detailed message
       onEmergencyDetected('voice', `${message} (volume level: ${volumePercent}%, API call sent)`);
+      
+      // Automatically trigger the camera for emergency photo
+      if (volumeLevel > VOLUME_THRESHOLD_HIGH) {
+        triggerEmergencyCamera('voice');
+        setResults([...results, 'Auto-capturing emergency photo']);
+      }
       
       // Set the last alert time
       lastEmergencyTimeRef.current = now;

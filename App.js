@@ -4,8 +4,10 @@ import { StatusBar } from 'expo-status-bar';
 import * as Speech from 'expo-speech';
 import * as Sensors from 'expo-sensors';
 import { Audio } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
 import AppNavigator from './src/navigation/AppNavigator';
 import { UserProvider } from './src/context/UserContext';
+import { EmergencyProvider } from './src/context/EmergencyContext';
 
 // Ignore specific warnings that might appear due to dependencies
 LogBox.ignoreLogs([
@@ -18,7 +20,8 @@ LogBox.ignoreLogs([
 export default function App() {
   const [permissions, setPermissions] = useState({
     microphone: false,
-    motion: false
+    motion: false,
+    camera: false
   });
 
   // Request necessary permissions when app starts
@@ -28,7 +31,8 @@ export default function App() {
         // Initialize permission status
         const permissionStatus = {
           microphone: false,
-          motion: false
+          motion: false,
+          camera: false
         };
         
         if (Platform.OS === 'ios' || Platform.OS === 'android') {
@@ -72,6 +76,23 @@ export default function App() {
             }
           }
           
+          // Request camera permissions
+          try {
+            const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+            permissionStatus.camera = cameraPermission.status === 'granted';
+            console.log('Camera permission status:', cameraPermission.status);
+            
+            if (cameraPermission.status !== 'granted') {
+              Alert.alert(
+                'Camera Permission Required',
+                'The emergency camera feature requires access to your camera to automatically capture photos during an emergency.',
+                [{ text: 'OK' }]
+              );
+            }
+          } catch (error) {
+            console.error('Error requesting camera permissions:', error);
+          }
+          
           // Update permissions state
           setPermissions(permissionStatus);
         }
@@ -91,14 +112,17 @@ export default function App() {
 
   return (
     <UserProvider>
-      <View style={{ flex: 1 }}>
-        <StatusBar style="light" />
-        <AppNavigator
-          permissionsGranted={arePermissionsGranted} 
-          microphonePermission={permissions.microphone}
-          motionPermission={permissions.motion}
-        />
-      </View>
+      <EmergencyProvider>
+        <View style={{ flex: 1 }}>
+          <StatusBar style="light" />
+          <AppNavigator
+            permissionsGranted={arePermissionsGranted} 
+            microphonePermission={permissions.microphone}
+            motionPermission={permissions.motion}
+            cameraPermission={permissions.camera}
+          />
+        </View>
+      </EmergencyProvider>
     </UserProvider>
   );
 }

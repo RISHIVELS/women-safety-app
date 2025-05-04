@@ -21,7 +21,8 @@ const HomeScreen = ({
   navigation,
   permissionsGranted = false, 
   microphonePermission = false, 
-  motionPermission = false 
+  motionPermission = false,
+  cameraPermission = false
 }) => {
   // Reference to the EmergencyAlertManager component using useRef instead of useState
   const alertManagerRef = useRef(null);
@@ -98,7 +99,7 @@ const HomeScreen = ({
         {/* Camera Test Component */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Camera Test</Text>
-          <CameraComponent />
+          <CameraComponent initialPermission={cameraPermission} />
         </View>
 
         {/* Main detection modules */}

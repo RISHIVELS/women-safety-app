@@ -10,7 +10,7 @@ import NearbyServicesScreen from '../screens/NearbyServicesScreen';
 
 const Tab = createBottomTabNavigator();
 
-const AppNavigator = ({ permissionsGranted, microphonePermission, motionPermission }) => {
+const AppNavigator = ({ permissionsGranted, microphonePermission, motionPermission, cameraPermission }) => {
   return (
     <NavigationContainer>
       <Tab.Navigator
@@ -52,6 +52,7 @@ const AppNavigator = ({ permissionsGranted, microphonePermission, motionPermissi
               permissionsGranted={permissionsGranted}
               microphonePermission={microphonePermission}
               motionPermission={motionPermission}
+              cameraPermission={cameraPermission}
             />
           )}
         </Tab.Screen>

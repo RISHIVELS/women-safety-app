@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Switch, StyleSheet, Vibration } from 'react-native';
 import { Accelerometer, Gyroscope } from 'expo-sensors';
+import { useEmergency } from '../context/EmergencyContext';
 
 const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => {
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -43,6 +44,9 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
   // Configure sensor update intervals (in ms)
   const UPDATE_INTERVAL = 100; // 10 updates per second
   const DISPLAY_UPDATE_INTERVAL = 500; // Only update display 2 times per second
+
+  // Access the emergency context
+  const { triggerEmergencyCamera } = useEmergency();
 
   // Check sensor availability on mount and when permissions change
   useEffect(() => {
@@ -334,6 +338,13 @@ const MotionDetector = ({ onEmergencyDetected, permissionsGranted = false }) => 
       console.log(`${reason}: ${value.toFixed(2)}`);
       console.log(`🚨 MOTION EMERGENCY DETECTED - This will send data to backend API`);
       onEmergencyDetected('motion', `${reason} (value: ${value.toFixed(2)})`);
+      
+      // Trigger emergency camera for severe movement
+      if (value > SEVERE_ACCELERATION_THRESHOLD) {
+        console.log('Severe motion detected - triggering emergency camera');
+        triggerEmergencyCamera('motion');
+      }
+      
       lastAlertTimeRef.current = now;
     }
   };
