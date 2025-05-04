@@ -2,6 +2,8 @@
  * API utilities for the women's safety app
  */
 
+import { API_URL } from './config';
+
 /**
  * Send an emergency alert to the backend server
  * @param {Object} data - Alert data including name and location
@@ -15,7 +17,7 @@ export const sendEmergencyAlert = async (data) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
     
-    const response = await fetch('https://23e2-2401-4900-1cd1-a38f-117b-8daa-90f9-1c58.ngrok-free.app/trigger-alert', {
+    const response = await fetch(`${API_URL}/trigger-alert`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
